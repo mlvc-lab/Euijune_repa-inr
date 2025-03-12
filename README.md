@@ -5,7 +5,7 @@
 
 # Requirements
 ```bash
-git clone git@github.com:mlvc-lab/Donhoon_ICCV2025_4bit_quant.git
+git clone git@github.com:mlvc-lab/Euijune_repa-inr.git
 conda env create --name <TBA> -f environment.yml
 conda activate <TBA>
 ```
