@@ -7,13 +7,13 @@ import glob
 import random
 
 
-def get_train_data(path, zero_mean=True, sidelen=256, out_feature=3, take=10, device=torch.device('cuda'), seed=1234):
+def get_train_data(log_dir, path, zero_mean=True, sidelen=256, out_feature=3, take=10, device=torch.device('cuda'), seed=1234):
     files = sorted(glob.glob(osp.join(path, "*")))
 
     # Randomly select
     sample = random.sample(range(len(files)), take)
 
-    with open(f'logs_STRAINER/config_{seed}.txt', 'w') as f:
+    with open(f'{log_dir}/config_{seed}.txt', 'w') as f:
         f.write(f'Randomly selected {take} images from {len(files)} images: \n{sample}')
     print(f'Randomly selected {take} images from {len(files)} images: \n{sample}')        
 
