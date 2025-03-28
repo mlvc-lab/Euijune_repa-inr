@@ -1,0 +1,20 @@
+mode: train
+exp_name: strainer_encoder_train
+log_dir: /home/choah76/workspace2/Team_repa_inr_neurips_2025/logs/strainer_encoder_train/20250328_213938
+data_dir: /local_dataset/DIV2K
+epochs: 1
+learning_rate: 0.0001
+plot_every: 100
+image_size: (256, 256)
+pos_encode: False
+zero_mean: True
+num_layers: 6
+hidden_features: 256
+in_channels: 2
+out_channels: 3
+shared_encoder_layers: 5
+num_decoders: 10
+nonlin: siren
+weight_path: /home/choah76/workspace2/Team_repa_inr_neurips_2025/logs/strainer_encoder_train/20250328_212436/ret_strainer_10decoder_test_seed1234.pt
+Randomly selected 10 images from 40 images: 
+[28, 7, 0, 5, 2, 36, 6, 22, 15, 37]
