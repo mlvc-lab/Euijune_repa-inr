@@ -35,19 +35,19 @@ def get_opts():
     parser.add_argument('--model_type', type=str, default='siren', required=['siren', 'finer', 'wire', 'gauss', 'pemlp'])
     parser.add_argument('--hidden_layers', type=int, default=3, help='hidden_layers, total_layer = first layer (1) + hidden_layers + Final_layer (1)') 
     parser.add_argument('--hidden_features', type=int, default=256, help='hidden_features')
-    parser.add_argument('--load_path', type=str, default=None, help='load model states from path')
-    parser.add_argument('--pretrain_epochs', type=int, default=500)
+    # parser.add_argument('--load_path', type=str, default=None, help='load model states from path')
+    # parser.add_argument('--pretrain_epochs', type=int, default=500)
     parser.add_argument('--out_feature', type=int, default=3, help='output channel dimension')
     
     # model hyp param
     parser.add_argument('--first_omega', type=float, default=30, help='(siren, wire, finer)')    
     parser.add_argument('--hidden_omega', type=float, default=30, help='(siren, wire, finer)')    
-    parser.add_argument('--scale', type=float, default=30, help='simga (wire, guass)')    
-    parser.add_argument('--N_freqs', type=int, default=10, help='(PEMLP)')    
+    # parser.add_argument('--scale', type=float, default=30, help='simga (wire, guass)')    
+    # parser.add_argument('--N_freqs', type=int, default=10, help='(PEMLP)')    
 
     # finer
-    parser.add_argument('--first_bias_scale', type=float, default=None, help='bias_scale of the first layer')    
-    parser.add_argument('--scale_req_grad', action='store_true')
+    # parser.add_argument('--first_bias_scale', type=float, default=None, help='bias_scale of the first layer')    
+    # parser.add_argument('--scale_req_grad', action='store_true')
     return parser.parse_args()
 
 

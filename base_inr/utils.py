@@ -23,7 +23,7 @@ class Logger:
         self.psnr = []
         self.ssim = []
         self.lpips = []
-        self.waveloss = []
+        #self.waveloss = []
         self.pred_imgs = {}
         self.state_dicts = {}
         self.total_time = 0.0

@@ -52,7 +52,7 @@ def train(opts, model, is_scheduler, coords, gt, size, zero_mean=True, loss_fn='
                     lpips_val = lpips_fn(pred.reshape(size), gt.reshape(size)).item()
 
                 # Calculate Wavelet coff difference
-                waveloss = waveloss_fn(pred.reshape(size).detach().cpu(), gt.reshape(size).detach().cpu())
+                #waveloss = waveloss_fn(pred.reshape(size).detach().cpu(), gt.reshape(size).detach().cpu())
             logger._append(waveloss=waveloss, psnr=psnr_val, ssim=ssim_val, lpips=lpips_val)
 
         # Save intermediate pred image
