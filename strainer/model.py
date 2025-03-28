@@ -132,8 +132,15 @@ class STRAINER(nn.Module):
         return outputs
 
     def load_encoder_weights_from(self, fellow_model):
-        self.encoderINR.load_state_dict(deepcopy(fellow_model.encoderINR.state_dict()))
+        if fellow_model is not None:
+            self.encoderINR.load_state_dict(deepcopy(fellow_model.encoderINR.state_dict()))
+        else:
+            raise ValueError("Fellow model is None")
 
-    def load_weights_from_file(self, file, key="encoderINR"):
-        weights = torch.load(file)
-        self.encoderINR.load_state_dict(deepcopy(weights['encoder_weights']))
+    def load_weights_from_file(self, file, prefix="encoderINR"):
+        model_state_dict = self.state_dict()
+        weights = torch.load(file)['state_dict']
+        encoder_state_dict = {k: v for k, v in weights.items() if k.startswith(prefix)}
+        for name, param in encoder_state_dict.items():
+            if name in model_state_dict:
+                model_state_dict[name] = deepcopy(param)

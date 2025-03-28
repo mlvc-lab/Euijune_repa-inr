@@ -7,21 +7,42 @@ import glob
 import random
 
 
-def get_train_data(log_dir, path, zero_mean=True, sidelen=256, out_feature=3, take=10, device=torch.device('cuda'), seed=1234):
-    files = sorted(glob.glob(osp.join(path, "*")))
+def set_seeds(seed=1234):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
-    # Randomly select
-    sample = random.sample(range(len(files)), take)
 
-    with open(f'{log_dir}/config_{seed}.txt', 'w') as f:
-        f.write(f'Randomly selected {take} images from {len(files)} images: \n{sample}')
-    print(f'Randomly selected {take} images from {len(files)} images: \n{sample}')        
+def get_data(config, take=1, sampling='random', sampling_list=None, device=torch.device('cuda'), seed=1234):
+    files = sorted(glob.glob(osp.join(config['data_dir'], "*")))
+
+    # select
+    if sampling == 'random':
+        sample = random.sample(range(len(files)), take)
+    elif sampling == 'custom' and sampling_list is not None:
+        sample = sampling_list
+    else:
+        raise ValueError(f"Invalid sampling method: {sampling} and sampling_list: {sampling_list}")
+
+    with open(f"{config['log_dir']}/config_{seed}.txt", 'a') as f:
+        flag = 'Randomly' if sampling == 'random' else 'Custom'
+        
+        if take > 1:
+            # train시에만 verbose
+            f.write(f'{flag} selected {take} images from {len(files)} images: \n{sample}')
+            print(f'{flag} selected {take} images from {len(files)} images: \n{sample}')        
 
     files = [files[i] for i in sample]
     images = []
     for fname in files:
     
-        pilmode='RGB' if out_feature == 3 else 'L'
+        pilmode='RGB' if config['out_channels'] == 3 else 'L'
         img = np.array(imageio.imread(fname, pilmode=pilmode), dtype=np.float32) / 255.   # [H, W, C], [0, 1]
         if img.ndim == 2:
             # 그레이스케일 이미지일 때
@@ -32,50 +53,16 @@ def get_train_data(log_dir, path, zero_mean=True, sidelen=256, out_feature=3, ta
         aug_list = [
                 ToTensor(),
                 CenterCrop(min(H, W)),
-                Resize((sidelen, sidelen)),
+                Resize(config['image_size']),
         ]
-        if zero_mean:
+        if config['zero_mean']:
                 aug_list.append(Normalize(torch.Tensor([0.5]), torch.Tensor([0.5])))
 
         transform = Compose(aug_list)
         img = transform(img).permute(1, 2, 0)
 
         H, W, C = img.shape
-
-        #gt = img.view(-1, C)
         images.append(img)
-        #print(img.shape)
-
-    return torch.stack(images).float().to(device)
-
-def get_test_data(path, zero_mean=True, sidelen=256, out_feature=3, idx=0, device=torch.device('cuda')):
-    files = sorted(glob.glob(osp.join(path, "*")))
-    file = files[idx]
-    images = []
-    
-    pilmode='RGB' if out_feature == 3 else 'L'
-    img = np.array(imageio.imread(file, pilmode=pilmode), dtype=np.float32) / 255.   # [H, W, C], [0, 1]
-    if img.ndim == 2:  # 그레이스케일 이미지일 때
-        img = np.expand_dims(img, axis=-1)  # C 차원을 추가하여 (1, H, W)로 만듦
-        
-    H, W, _ = img.shape
-
-    aug_list = [
-            ToTensor(),
-            CenterCrop(min(H, W)),
-            Resize((sidelen, sidelen)),
-    ]
-    if zero_mean:
-            aug_list.append(Normalize(torch.Tensor([0.5]), torch.Tensor([0.5])))
-
-    transform = Compose(aug_list)
-    img = transform(img).permute(1, 2, 0)
-
-    H, W, C = img.shape
-
-    #gt = img.view(-1, C)
-    images.append(img)
-    #print(img.shape)
 
     return torch.stack(images).float().to(device)
 
