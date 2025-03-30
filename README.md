@@ -6,9 +6,12 @@
 # Requirements
 ```bash
 git clone git@github.com:mlvc-lab/Euijune_repa-inr.git
-conda env create --name <TBA> -f environment.yml
-conda activate <TBA>
+conda env create --name REPAIR -f environment.yml
+conda activate REPAIR
 ```
 
 # Experiments
-TBA
+Run STRAINER
+```
+python strainer/main.py
+```
