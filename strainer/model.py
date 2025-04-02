@@ -4,6 +4,15 @@ import numpy as np
 from copy import deepcopy
 
 
+def build_mlp(hidden_size, projector_dim, z_dim):
+    return nn.Sequential(
+                nn.Linear(hidden_size, projector_dim),
+                nn.SiLU(),
+                nn.Linear(projector_dim, projector_dim),
+                nn.SiLU(),
+                nn.Linear(projector_dim, z_dim),
+            )
+
 class SineLayer(nn.Module):
     '''
         See paper sec. 3.2, final paragraph, and supplement Sec. 1.5 for
@@ -44,7 +53,14 @@ class SineLayer(nn.Module):
 class SIREN(nn.Module):
     def __init__(self, in_features, hidden_features, hidden_layers, 
                  out_features, outermost_linear=True, first_omega_0=30, 
-                 hidden_omega_0=30., pos_encode=False, no_init=False):
+                 hidden_omega_0=30., pos_encode=False, no_init=False,
+                 z_dims=[768], projector_dim=2048, encoder_depth=None):
+        '''
+        z_dims: list of dimensions of the latent space for each encoder(ex. DINOv2)
+        projector_dim: dimension of the projector network
+        encoder_depth: index of the encoder layer to get the activations (1부터 시작)
+        '''
+        
         super().__init__()
         self.pos_encode = pos_encode
         self.nonlin = SineLayer
@@ -75,11 +91,26 @@ class SIREN(nn.Module):
             self.net.append(final_linear)
 
         self.net = nn.Sequential(*self.net)
+        self.encoder_depth = encoder_depth
+        
+        # For REPAIRLoss
+        if self.encoder_depth is not None:
+            self.projectors = nn.ModuleList([
+                build_mlp(hidden_features, projector_dim, z_dim) for z_dim in z_dims
+                ])
 
     def forward(self, coords):
-        if self.pos_encode:
-            coords = self.positional_encoding(coords)
-        return self.net(coords)
+        zs = None
+        x = self.positional_encoding(coords) if self.pos_encode else coords
+        
+        for i , layer in enumerate(self.net):
+            x = layer(x)
+            print("x.shape: ", x.shape)
+            if self.encoder_depth is not None and (i + 1) == self.encoder_depth:
+                zs = [projector(x) for projector in self.projectors]
+                print("zs.shape: ", zs[0].shape)
+        
+        return x, zs
 
 class STRAINER(nn.Module):
     def __init__(self, in_features, hidden_features,
@@ -87,13 +118,23 @@ class STRAINER(nn.Module):
                  out_features, outermost_linear=True,
                  first_omega_0=30, hidden_omega_0=30.,
                  pos_encode=False,
-                 shared_encoder_layers=None, num_decoders=None, no_init=False):
+                 shared_encoder_layers=None, num_decoders=None, no_init=False,
+                 z_dims=[768], projector_dim=2048, encoder_depth=None):
+        '''
+        z_dims: list of dimensions of the latent space for each encoder(ex. DINOv2)
+        projector_dim: dimension of the projector network
+        encoder_depth: index of the encoder layer to get the activations (1부터 시작)
+        '''
 
         super().__init__()
         assert shared_encoder_layers is not None, "Please mention shared_encoder_layers. Use 0 if none are shared"
         assert hidden_layers > shared_encoder_layers, "Total hidden layers must be greater than number of layers in shared encoder"
+        if encoder_depth is not None:
+            assert encoder_depth <= shared_encoder_layers, "Encoder depth must be equal or less than shared encoder layers"
+        
         self.shared_encoder_layers = shared_encoder_layers
         self.num_decoders = num_decoders
+        self.encoder_depth = encoder_depth
 
         self.encoderINR = SIREN(
             in_features=in_features,
@@ -104,7 +145,10 @@ class STRAINER(nn.Module):
             first_omega_0=first_omega_0,
             hidden_omega_0=hidden_omega_0,
             pos_encode=pos_encode,
-            no_init=no_init
+            no_init=no_init,
+            z_dims=z_dims,
+            projector_dim=projector_dim,
+            encoder_depth=self.encoder_depth
         )
 
         self.num_decoder_layers = hidden_layers - self.shared_encoder_layers
@@ -121,15 +165,15 @@ class STRAINER(nn.Module):
                                                 pos_encode=pos_encode,
                                                 no_init=no_init
                                             ) for i in range(self.num_decoders)])
+        
 
     def forward(self, coords):
-        encoded_features = self.encoderINR(coords)
+        encoded_features, zs_tilde = self.encoderINR(coords)
         outputs = []
         for _idx, _decoder in enumerate(self.decoderINRs):
-            output = _decoder(encoded_features)
-            outputs.append(output)
-
-        return outputs
+            output = _decoder(encoded_features)  # zs는 encoder에서만 계산됨. decoder에서는 항상 None
+            outputs.append(output[0])
+        return outputs, [zs_tilde] * self.num_decoders
 
     def load_encoder_weights_from(self, fellow_model):
         if fellow_model is not None:
