@@ -5,6 +5,10 @@ from loss import REPAIRLoss, MSELoss
 from model import STRAINER
 
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+
 def fit_inr(config={}, name=None, idx=None):    
     im_tensors = get_data(config, 
                           take=config['num_decoders'], 
@@ -15,10 +19,12 @@ def fit_inr(config={}, name=None, idx=None):
     data = {'image_size':config['image_size'], 'gt':[x.reshape(1, -1, 3) for x in im_tensors]}
     gt_tensors = data['gt']
     
-    if config['enc_type'] != None:
+    if config['enc_type'] == 'dinov2-vit-b':
         encoders, encoder_types, architectures = load_encoders(
             config['enc_type'], config['device'], resolution=config['image_size'][0]
             )
+    elif config['enc_type'] is None:
+        encoders, encoder_types, architectures = None, None, None
     else:
         raise NotImplementedError()
     
@@ -53,15 +59,19 @@ def fit_inr(config={}, name=None, idx=None):
                     z_dims=z_dims).to(config['device'])
     model = model.train()
     if config['weight_path'] is not None:
-                model.load_weights_from_file(config['weight_path'])
+        print(f"Loading weights from {config['weight_path']}")
+        model.load_weights_from_file(config['weight_path'])
                 
     optim = torch.optim.Adam(lr=config['learning_rate'], params=model.parameters())
     
+    for i in range(len(gt_tensors)):
+        gt_save = gt_tensors[i].detach().cpu().numpy().reshape(256, 256, 3)
+        plt.imsave(f"{config['log_dir']}/gt_{i}.png", np.clip(gt_save, 0, 1))
     
     tbar = tqdm(range(config['epochs']))
     psnr_vals = []
     for epoch in tbar:
-        outputs, zs_tilde = model(coords) # (10, 1, HW, 3), (10, 1, HW, 256)
+        outputs, zs_tilde = model(coords) # (B, 1, HW, 3), (B, 1, HW, 256=hidden_dim), [0, 1]
         stacked_outputs = torch.stack(outputs, dim=0)
         stacked_gt = torch.stack(gt_tensors, dim=0)
         loss = loss_fn(stacked_outputs, stacked_gt, zs_tilde, zs)
@@ -70,16 +80,22 @@ def fit_inr(config={}, name=None, idx=None):
         loss.backward()
         optim.step()
         optim.zero_grad(set_to_none=True)
-        
-        # PSNR 계산을 위해 추가
-        stacked_outs = stacked_outputs/2+0.5
-        stacked_gt = stacked_gt/2+0.5
 
-        psnr = -10*torch.log10(((stacked_outs - stacked_gt)**2).mean(dim=[1,2,3]).sum()) #  config['image_size'][0],  config['image_size'][1])
+        psnr = -10*torch.log10(loss)
         psnr_vals.append(float(psnr))
 
-        tbar.set_description(f"Iter {epoch}/{config['epochs']} Loss = {loss.item():6f} PSNR = {psnr:.4f}")
-        tbar.refresh()
+        # Fpr Logging
+        if epoch > 0 and epoch % config['plot_every'] == 0:
+            for i in range(len(stacked_outputs)):
+                img_save = stacked_outputs[i].detach().cpu().numpy().reshape(256, 256, 3)
+                plt.imsave(f"{config['log_dir']}/epoch_{epoch}_{i}.png", np.clip(img_save, 0, 1))
+                
+        # For debugging
+        tbar.set_description(f"Iter {epoch}/{config['epochs']} Loss = {loss.item():6f} PSNR = {psnr.item():.4f} MIN = {stacked_outputs[0].min():.4f} MAX = {stacked_outputs[0].max():.4f}")
+        
+        # Else
+        # tbar.set_description(f"Iter {epoch}/{config['epochs']} Loss = {loss.item():6f} PSNR = {psnr.item():.4f}")
+        # tbar.refresh()
         
     result = {
         "psnr" : psnr_vals,

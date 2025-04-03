@@ -4,14 +4,40 @@ import numpy as np
 from copy import deepcopy
 
 
-def build_mlp(hidden_size, projector_dim, z_dim):
-    return nn.Sequential(
-                nn.Linear(hidden_size, projector_dim),
-                nn.SiLU(),
-                nn.Linear(projector_dim, projector_dim),
-                nn.SiLU(),
-                nn.Linear(projector_dim, z_dim),
-            )
+class Projector(nn.Module):
+    '''
+    input: tensor (B, H*W, INR_hidden_dim)
+    output: tensor (B, p1*p2, z_dim) where p1*p2 = kernel_size (16x16)
+    '''
+    def __init__(self, hidden_size, projector_dim, z_dim, kernel_size=16, stride=16):
+        super(Projector, self).__init__()
+        self.avgpool = nn.AvgPool2d(kernel_size=kernel_size, stride=stride)
+        self.linear1 = nn.Linear(hidden_size, projector_dim)
+        self.silu1 = nn.SiLU()
+        self.linear2 = nn.Linear(projector_dim, projector_dim)
+        self.silu2 = nn.SiLU()
+        self.linear3 = nn.Linear(projector_dim, z_dim)
+
+    def forward(self, x):
+        # x.shape = (B, H*W, INR_hidden_dim)
+        x = x.permute(0, 2, 1)
+        x = x.reshape(x.shape[0], x.shape[1], 256, 256)
+        # x.shape = (B, INR_hidden_dim, H, W)
+        x = self.avgpool(x)
+        # x.shape = (B, INR_hidden_dim, p1, p2), p1, p2 = kernel_size (16x16)
+        x = x.view(1, 256, -1)
+        x = x.permute(0, 2, 1)
+        # x.shape = (B, p1*p2, INR_hidden_dim)
+        x = self.linear1(x)
+        x = self.silu1(x)
+        x = self.linear2(x)
+        x = self.silu2(x)
+        x = self.linear3(x)
+        # x.shape = (B, p1*p2, z_dim)
+        return x
+
+def build_projector(hidden_size, projector_dim, z_dim, kernel_size=16, stride=16):
+    return Projector(hidden_size, projector_dim, z_dim, kernel_size, stride)
 
 class SineLayer(nn.Module):
     '''
@@ -96,7 +122,11 @@ class SIREN(nn.Module):
         # For REPAIRLoss
         if self.encoder_depth is not None:
             self.projectors = nn.ModuleList([
-                build_mlp(hidden_features, projector_dim, z_dim) for z_dim in z_dims
+                build_projector(hidden_features, 
+                                projector_dim, 
+                                z_dim, 
+                                kernel_size=16, 
+                                stride=16) for z_dim in z_dims
                 ])
 
     def forward(self, coords):
@@ -105,10 +135,8 @@ class SIREN(nn.Module):
         
         for i , layer in enumerate(self.net):
             x = layer(x)
-            print("x.shape: ", x.shape)
             if self.encoder_depth is not None and (i + 1) == self.encoder_depth:
                 zs = [projector(x) for projector in self.projectors]
-                print("zs.shape: ", zs[0].shape)
         
         return x, zs
 
@@ -173,7 +201,7 @@ class STRAINER(nn.Module):
         for _idx, _decoder in enumerate(self.decoderINRs):
             output = _decoder(encoded_features)  # zs는 encoder에서만 계산됨. decoder에서는 항상 None
             outputs.append(output[0])
-        return outputs, [zs_tilde] * self.num_decoders
+        return outputs, [zs_tilde] * 10
 
     def load_encoder_weights_from(self, fellow_model):
         if fellow_model is not None:
@@ -182,9 +210,10 @@ class STRAINER(nn.Module):
             raise ValueError("Fellow model is None")
 
     def load_weights_from_file(self, file, prefix="encoderINR"):
-        model_state_dict = self.state_dict()
-        weights = torch.load(file)['state_dict']
-        encoder_state_dict = {k: v for k, v in weights.items() if k.startswith(prefix)}
-        for name, param in encoder_state_dict.items():
-            if name in model_state_dict:
-                model_state_dict[name] = deepcopy(param)
+        ckpt = torch.load(file)
+        encoder_state_dict = {}
+        for k, v in ckpt['state_dict'].items():
+            # encoderINR로 시작하는 레이어만 선택, encoder에 같이 있는 projector는 eval에서 안쓰므로 제외
+            if k.startswith(prefix) and k.find('projectors') == -1:  
+                encoder_state_dict[k.replace(f'{prefix}.', '')] = v 
+        self.encoderINR.load_state_dict(encoder_state_dict)

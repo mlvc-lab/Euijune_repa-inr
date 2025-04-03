@@ -24,7 +24,6 @@ def set_seeds(seed=1234):
 
 def get_data(config, take=1, sampling='random', sampling_list=None, device=torch.device('cuda'), seed=1234):
     files = sorted(glob.glob(osp.join(config['data_dir'], "*")))
-
     # select
     if sampling == 'random':
         sample = random.sample(range(len(files)), take)
