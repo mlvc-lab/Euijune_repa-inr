@@ -74,14 +74,15 @@ def fit_inr(config={}, name=None, idx=None):
         outputs, zs_tilde = model(coords) # (B, 1, HW, 3), (B, 1, HW, 256=hidden_dim), [0, 1]
         stacked_outputs = torch.stack(outputs, dim=0)
         stacked_gt = torch.stack(gt_tensors, dim=0)
-        loss = loss_fn(stacked_outputs, stacked_gt, zs_tilde, zs)
-            
+        recon_loss, alignment_loss = loss_fn(stacked_outputs, stacked_gt, zs_tilde, zs)
+        
+        loss = recon_loss + alignment_loss if alignment_loss is not None else recon_loss
         ## optimization
         loss.backward()
         optim.step()
         optim.zero_grad(set_to_none=True)
 
-        psnr = -10*torch.log10(loss)
+        psnr = -10*torch.log10(recon_loss)
         psnr_vals.append(float(psnr))
 
         # Fpr Logging

@@ -18,7 +18,7 @@ class REPAIRLoss(nn.Module):
 
         # projection loss
         proj_loss = 0.
-        bsz = zs[0].shape[0]
+        bsz = zs[0].shape[0]    # (10, 1, 256, j768)
         for i, (z, z_tilde) in enumerate(zip(zs, zs_tilde)):
             # i = visual_encoder_idx
             # REPA github에서는 Dinov2말고도 다른 encoder들도 같이 함. 
@@ -29,7 +29,8 @@ class REPAIRLoss(nn.Module):
                 proj_loss += mean_flat(-(z_j * z_tilde_j).sum(dim=-1))
         proj_loss /= (len(zs) * bsz)
         
-        return recon_loss + proj_loss * self.proj_coeff
+        alignment_loss = (1 - proj_loss) * self.proj_coeff
+        return recon_loss, alignment_loss
     
 class MSELoss(nn.Module):
     def __init__(self):
@@ -37,5 +38,6 @@ class MSELoss(nn.Module):
 
     def __call__(self, pred, gt, zs_tilde=None, zs=None):
         # In MSELoss, zs_tilde and zs are not used.
-        loss_val = mean_flat((pred - gt) ** 2).sum()
-        return loss_val
+        recon_loss = mean_flat((pred - gt) ** 2).sum()
+        alignment_loss = None   # MSE Loss에서는 alignment 계산이 불필요요
+        return recon_loss, alignment_loss
