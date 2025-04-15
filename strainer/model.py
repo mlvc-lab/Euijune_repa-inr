@@ -80,7 +80,7 @@ class SIREN(nn.Module):
     def __init__(self, in_features, hidden_features, hidden_layers, 
                  out_features, outermost_linear=True, first_omega_0=30, 
                  hidden_omega_0=30., pos_encode=False, no_init=False,
-                 z_dims=[768], projector_dim=2048, encoder_depth=None):
+                 z_dims=[768], projector_dim=2048, encoder_depth=-1):
         '''
         z_dims: list of dimensions of the latent space for each encoder(ex. DINOv2)
         projector_dim: dimension of the projector network
@@ -120,7 +120,7 @@ class SIREN(nn.Module):
         self.encoder_depth = encoder_depth
         
         # For REPAIRLoss
-        if self.encoder_depth is not None:
+        if self.encoder_depth > -1:
             self.projectors = nn.ModuleList([
                 build_projector(hidden_features, 
                                 projector_dim, 
@@ -135,7 +135,7 @@ class SIREN(nn.Module):
         
         for i , layer in enumerate(self.net):
             x = layer(x)
-            if self.encoder_depth is not None and (i + 1) == self.encoder_depth:
+            if self.encoder_depth is not None and i == self.encoder_depth:
                 zs = [projector(x) for projector in self.projectors]
         
         return x, zs
@@ -212,8 +212,9 @@ class STRAINER(nn.Module):
     def load_weights_from_file(self, file, prefix="encoderINR"):
         ckpt = torch.load(file)
         encoder_state_dict = {}
-        for k, v in ckpt['state_dict'].items():
+        for k, v in ckpt['state_dict_last'].items():
             # encoderINR로 시작하는 레이어만 선택, encoder에 같이 있는 projector는 eval에서 안쓰므로 제외
             if k.startswith(prefix) and k.find('projectors') == -1:  
-                encoder_state_dict[k.replace(f'{prefix}.', '')] = v 
+                encoder_state_dict[k.replace(f'{prefix}.', '')] = v
+            
         self.encoderINR.load_state_dict(encoder_state_dict)

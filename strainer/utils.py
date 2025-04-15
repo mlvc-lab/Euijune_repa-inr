@@ -22,8 +22,13 @@ def set_seeds(seed=1234):
         torch.backends.cudnn.benchmark = False
 
 
-def get_data(config, take=1, sampling='random', sampling_list=None, device=torch.device('cuda'), seed=1234):
-    files = sorted(glob.glob(osp.join(config['data_dir'], "*")))
+def get_data(config, sampling_list):
+    take = config.num_decoders
+    sampling = config.sampling
+    device = config.device
+    seed = config.seed
+    
+    files = sorted(glob.glob(osp.join(config.data_dir, "*")))
     # select
     if sampling == 'random':
         sample = random.sample(range(len(files)), take)
@@ -32,7 +37,7 @@ def get_data(config, take=1, sampling='random', sampling_list=None, device=torch
     else:
         raise ValueError(f"Invalid sampling method: {sampling} and sampling_list: {sampling_list}")
 
-    with open(f"{config['log_dir']}/config_{seed}.txt", 'a') as f:
+    with open(f"{config.save_dir}/config_{seed}.txt", 'a') as f:
         flag = 'Randomly' if sampling == 'random' else 'Custom'
         
         if take > 1:
@@ -44,7 +49,7 @@ def get_data(config, take=1, sampling='random', sampling_list=None, device=torch
     images = []
     for fname in files:
     
-        pilmode='RGB' if config['out_channels'] == 3 else 'L'
+        pilmode='RGB' if config.out_channels == 3 else 'L'
         img = np.array(imageio.imread(fname, pilmode=pilmode), dtype=np.float32) / 255.   # [H, W, C], [0, 1]
         if img.ndim == 2:
             # 그레이스케일 이미지일 때
@@ -55,9 +60,9 @@ def get_data(config, take=1, sampling='random', sampling_list=None, device=torch
         aug_list = [
                 ToTensor(),
                 CenterCrop(min(H, W)),
-                Resize(config['image_size']),
+                Resize(config.img_size),
         ]
-        if config['zero_mean']:
+        if config.zero_mean:
                 aug_list.append(Normalize(torch.Tensor([0.5]), torch.Tensor([0.5])))
 
         transform = Compose(aug_list)
